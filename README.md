@@ -1,104 +1,170 @@
-# ThesisLab — M1 local evidence core
+｜投资命题与多证据验证
 
-ThesisLab is an investment thesis verification workspace. **This repository currently implements only M1:** offline evidence provenance, deterministic financial calculations, conflict detection, field-level review and local recovery. It is not a chatbot, investment rating service, Web application or trading system.
+> **让投资判断成为可拆解、可追溯、可证伪、可持续修订的研究对象。**
 
-正式仓库：<https://github.com/C1ra-Gao/investment-thesis-lab>。M1在本地开发；首次Push须用户另行批准。
+ThesisLab 是一个面向投资研究场景的 AI 辅助命题验证原型。用户输入的是**陈述式投资主张**，例如“估值回落但基本面未恶化”“盈利改善主要来自主营业务”，而不是向聊天机器人提出一个金融问题。系统尝试将主张拆分为具有逻辑关系的可检验断言，组织支持、反对及无法验证的证据，并记录**什么新信息会改变当前判断**。
 
-## 安装与运行
+本项目针对「投资命题与多证据验证」中文考题开发。当前交付重点是已测试的**证据与命题验证后端**，以及经真实调用检验、仍需人工审核的 DeepSeek 候选拆解能力；**不是已经完整上线的 Web 产品或投资建议系统**。
 
-要求：Python **3.12+**、Git；SQLite由Python提供。核心依赖SQLAlchemy，真实PDF回归另需pdfplumber。无需API Key、Keychain、LLM或金融SDK。
+## 一、解决什么问题
 
-在仓库根目录创建隔离环境：
+投资判断通常不是一个孤立事实，而是数个前提、比较关系与解释机制的组合。传统的聊天式研究容易产生四类问题：
 
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.lock
-.venv/bin/python -m pip install --no-deps -e .
-.venv/bin/python -m thesislab init-db
+1. **论点难以验证**：一句“盈利改善来自主营业务”同时涉及盈利变化、主营贡献和非主营解释。
+2. **证据难以追溯**：结论中的数字可能缺少具体报表、期间、合并范围、原始字段与计算公式。
+3. **冲突被过早抹平**：供应商数据与官方披露的日期或统计口径不一致时，不能仅凭模型信心选择一方。
+4. **结论无法持续维护**：新财报、指标口径变化或原始数据更正，应触发有依据的重验，而不是覆盖旧研究记录。
+
+ThesisLab 以 **Investment Thesis（投资论点）** 为研究对象，强调“模型提出候选结构、用户审核研究计划、程序核验事实与计算、研究结果保留证据依赖”。
+
+## 二、核心研究流程
+
+```text
+陈述式投资主张
+      ↓
+候选命题拆解（Claim Graph）
+      ↓
+用户审查、必要澄清与修订
+      ↓
+研究计划（支持 / 反证 / 竞争解释辨别任务）
+      ↓
+证据准入与确定性计算
+      ↓
+来源、口径、日期与数字冲突审查
+      ↓
+支持 / 反对 / 无法验证的命题判断
+      ↓
+结论改变条件（证伪 / 削弱 / 需重验）
+      ↓
+版本保存与后续研究
 ```
 
-构建工具固定setuptools 80.9.0；首次安装需要下载公开依赖，不调用金融服务。requirements.lock记录本次验证的完整运行依赖版本；不同OS的wheel可用性尚未验证。Windows可使用 `.venv\Scripts\python.exe` 替换路径。
+**三个概念严格区分：**
 
-### 合成单元测试
+- **Thesis**：用户提出的原始投资判断，保留原句和研究范围。
+- **Subclaim**：能够独立受到证据支持、反对或暂时无法验证的断言，包含必要前提、比较、机制等逻辑关系。
+- **Evidence Task**：为检验某个断言而采取的取数、定位原文、计算或辨别竞争解释的具体步骤；任务本身不是事实断言。
+
+模型不能直接将生成的论点、数字或引用提升为可信证据。对于预测与因果主张，**“尚无足够证据”不等于“被证伪”**。
+
+## 三、真实案例：收入增长是否伴随毛利率改善？
+
+研究主张：**“贵州茅台 2026 年 Q1 与 H1 合并营业收入同比增长，且毛利率同比改善。”**
+
+已完成的内部核验使用贵州茅台 **2025 / 2026 年第一季度和半年度报告**：四份原始财报，八个合并利润表收入／成本数字，均与既有扶摇响应逐分一致。计算由 Decimal 程序完成，非语言模型心算。
+
+| 期间 | 营业收入同比 | 毛利率同比变化 | 对相应子命题的判断 |
+|---|---:|---:|---|
+| 2026 Q1（1–3月） | +6.5380% | −2.2144 个百分点 | 收入增长：支持；毛利率改善：反对 |
+| 2026 H1（1–6月累计） | +1.4699% | −1.7441 个百分点 | 收入增长：支持；毛利率改善：反对 |
+| 2026 Q2 单季（4–6月，差分推导） | −5.1417% | −1.1633 个百分点 | 补充比较；不是 API 直接返回的单季字段 |
+
+**限定结论：** 在上述主体、期间、合并范围和计算口径下，“收入增长且毛利率改善”的组合主张**受到反对证据**。Q1 与 H1 区间重叠，不能算两个独立样本；这些数字也不能证明收入与毛利率变化之间的因果关系。
+
+**真实冲突案例：** 原始响应中 2025 年 Q1、H1 的 `report_date_ms` 对应到 2026 年日期，与发行人官网的 2025 年披露日不一致。项目保留供应商原字段，将发行人披露日独立记录，并将供应商日期语义保留为 **UNVERIFIED**，而不是静默覆盖。
+
+原始报告链接（用于定位与自行复核，不代表拥有第三方数据再分发权）：
+
+- [贵州茅台 2025 年第一季度报告](https://www.moutaichina.com/mtgf/articleFileDir/2025-05/08/3329e26c2c524b318c83e6296e354021.pdf) — 合并利润表 p.8
+- [贵州茅台 2025 年半年度报告](https://www.moutaichina.com/mtgf/articleFileDir/2025-08/18/371190afa8d449cebff9cc34dd01014b.pdf) — 合并利润表 p.28
+- [贵州茅台 2026 年第一季度报告](https://www.moutaichina.com/mtgf/articleFileDir/2026-04/27/caf6cef38da94e9e9e71949ad0064f77.pdf) — 合并利润表 p.8
+- [贵州茅台 2026 年半年度报告](https://www.moutaichina.com/mtgf/articleFileDir/2026-08/17/277c9b776bff4ae89dde75e987437760.pdf) — 合并利润表 p.30
+
+> **数据说明：** 以上为已完成内部核验的汇总结果。正式公开仓库不包含扶摇原始响应、私人回归数据库或整份原始报告文件。仓库的公开测试不应被误写为“可在没有私有材料时复现全部真实财报回归”。
+
+## 四、实现情况
+
+| 模块 | 当前状态 | 已实现内容或限制 |
+|---|---|---|
+| M1：可信证据链 | **已实现，报告测试通过** | 原始来源、JSON Pointer/PDF 页表字段定位；Decimal 计算；口径及日期冲突；字段级裁决；SQLite 追加式历史与恢复 |
+| M2：离线命题验证 | **已实现，报告测试通过** | 人工候选 Claim Graph、研究计划确认、证据绑定、AND/OR/必要条件规则、三态判断、Change Conditions 检查、修订与 CLI 恢复 |
+| M2.5：DeepSeek 候选拆解 | **真实 API 已评测，质量未达稳定可用** | 两轮共六次真实请求；第二轮 2/3 通过结构契约，但仍有语义错误；必须人工审查与修订 |
+| M3：Web 工作台 | **未确认完成** | 不宣称已提供可操作 Web URL、图形比较或完整追问体验 |
+| 通用财务/因果数据覆盖 | **受限** | 原始资料与指标按对象逐项核验；估值历史、产业链因果识别、主营利润贡献桥等尚无普遍覆盖承诺 |
+
+**结论改变条件**目前支持 `falsify`（证伪）、`weaken`（削弱）、`revalidate`（需重验）三类：记录观察项、时间窗口、证据要求、触发判断与受影响子命题。当前为手动检查，不具备后台持续监控能力。
+
+## 五、AI 在系统中的角色及实际评测
+
+- **候选结构生成**：DeepSeek 根据陈述式主张提出 Subclaims、逻辑关系、竞争解释及研究任务。
+- **严格契约校验**：候选 JSON 通过解析后，仍须接受原文映射、节点类型、关系、任务和条件检查。
+- **用户确认**：Schema 通过不代表语义正确；模型建议不能自动成为用户主张，模型产物不能直接写入可信证据。
+- **确定性验证**：财务数值、计算、口径匹配、重大冲突与组合判断交由程序及审核规则执行。
+
+已报告的 DeepSeek 六次调用结果：**首轮 JSON 3/3、M2 契约 0/3；第二轮契约 2/3**。具体问题包括字符索引偏差、冗余组合节点、归因节点不完整、把“无法识别因果影响”误写成证伪、预测结果未独立建模。项目不宣称 AI 拆解已经达到可靠自动化水平。
+
+## 六、技术架构
+
+- **语言与运行环境**：Python 3.12+
+- **数据与持久化**：SQLAlchemy、SQLite；研究修订与审核事件追加记录
+- **金融计算**：Python `Decimal`，命名计算算子与输入来源链
+- **原始资料处理**：PDF 解析与已授权的本地资料核验
+- **命题验证**：自建研究契约、证据准入、组合逻辑及变化条件检查
+- **AI 候选生成**：独立的模型适配接口；DeepSeek 真实评测与 M2 确定性引擎隔离
+
+本项目**没有 Fork** Quantifact、Mira、VerumTrade 或 AgenticThesis 等项目；借鉴其公开研究设计，但目前的已实现代码为独立开发。公开仓库尚未选择项目开源许可证；公开可见不等于允许第三方任意再分发。
+
+## 七、本地安装与运行
+
+要求 Python 3.12+、Git；测试环境使用独立虚拟环境。以下为项目 README 已记录的安装方式：
+
+```bash
+ git clone https://github.com/C1ra-Gao/investment-thesis-lab.git
+ cd investment-thesis-lab
+ python3 -m venv .venv
+ .venv/bin/python -m pip install -r requirements.lock
+ .venv/bin/python -m pip install --no-deps -e .
+ .venv/bin/python -m thesislab init-db
+```
+
+运行不需要 DeepSeek Key 的离线测试：
 
 ```bash
 .venv/bin/python tools/run_tests.py
 ```
 
-未配置私人材料时，真实回归组会明确 **skip**；合成测试通过不表示真实财报核验通过。
+人工候选结构与研究确认的 CLI 示例见 [`docs/M2-USAGE.md`](docs/M2-USAGE.md)（需确保该文件已随源码提交）。常用命令：
 
-### 私人真实材料回归（不随仓库发布）
-
-将已有Phase 3目录放在仓库之外；本次工作区默认相邻路径为 `../ThesisLab-Phase3-Data-Validation`。缺材料时失败，程序不下载、不调用认证接口、不用合成数据替代。
-
-必需本地文件：
-
-```text
-<Phase3 root>/
-  diagnostic-followup/income-response-new-1.json
-  diagnostic-followup/new-request-records.json
-  final-evidence/verified-numeric-trace.json
-  final-evidence/original-document-manifest.json
-  final-evidence/issuer-report-index.html
-  final-evidence/original-reports/<four locally verified PDFs>
+```bash
+.venv/bin/python -m thesislab draft --thesis manual-example --input .local/draft.json --origin manual
+.venv/bin/python -m thesislab confirm --draft '<draft-id>' --reviewer '<operator>' --meaning-reviewed
+.venv/bin/python -m thesislab evaluate --confirmation '<confirmation-id>' --bindings .local/bindings.json --reviewer '<operator>' --as-of 2026-10-14
+.venv/bin/python -m thesislab research-show --thesis manual-example --output .local/history.json
 ```
+
+命令中的 draft/confirmation ID 应取实际运行结果；`.local/` 为本地忽略目录，以上不是可在空仓库直接运行的完整演示脚本。真实财报回归还需要仓库外的 Phase 3 私有材料，且不得上传至公开仓库。
+
+## 八、测试与复现边界
+
+M2 完成报告记录：**112 项测试通过、0 跳过**，其中包含 M1 的 68 项测试（含 11 项真实材料回归）、41 项新增合成／人工契约测试及 3 项真实证据组合回归。该结果来自开发阶段记录，并不表示公开克隆仓库后无需私有输入即可复现全部 112 项。
+
+真实材料齐全且有权使用时：
 
 ```bash
 THESISLAB_PHASE3_ROOT=../ThesisLab-Phase3-Data-Validation \
   .venv/bin/python tools/run_tests.py --require-real
-
-.venv/bin/python -m thesislab regress \
-  --phase3-root ../ThesisLab-Phase3-Data-Validation
-.venv/bin/python -m thesislab restore
 ```
 
-首个命令实际读取四份PDF的页／表／本期列，并核对八个收入成本值、统计单位与日期目录；计算同比、毛利率、累计转单季并与既有独立审计基准比较。第二个命令将来源、原始快照、字段、计算、关系和审计存入 `.local/regression.sqlite`；第三个命令重新打开并恢复未决冲突。详细结果存入 `.local/regression.json` 和 `.local/restored.json`，终端只显示计数与状态。
+离线负向测试覆盖缺值、零分母、范围不一致、引用缺失、冲突未决、源数据覆写、未来披露和候选结构不合法等情况。完整测试条件与实现记录见项目 `docs/` 文档。
 
-**所有 `.local/` 内容含内部数据，禁止提交、上传到Issue／PR或公开展示。** CLI强制数据库和结果写到项目 `.local/`。测试材料必须在仓库外；`.env.example`只提供本地路径示例，不加载秘密。环境变量只配置测试输入路径，不存API凭证。
+## 九、产品设计与进一步研究
 
-## 已实现
+设计目标还包括 Web 研究库、可编辑工作台、跨对象／版本比较、证据内追问和研究任务保存恢复。它们在 PRD 中有交互定义，**不等同于已经全部实现**。
 
-- 不可变领域契约：Subclaim、逻辑关系、Revision、Evidence／Scope／Locator、Assessment；没有LLM拆解。
-- 原始JSON／PDF／目录的本地快照、hash、来源、获取与披露时间；JSON Pointer与财报页／行／列定位。
-- Decimal 32位局部上下文：同比、毛利率、毛利率百分点差、YTD累计转下一单季；记录输入ID、公式与版本，禁止float、缺数补零或不对齐计算。
-- 期间、合并范围、币种／单位、实际／预测与未知口径分类；同口径数字差异；供应商日期与发行人目录日期冲突。
-- 字段级采用依据、未决冲突、追加审计；原始Evidence与RawArtifact不被审核覆盖。
-- SQLAlchemy＋SQLite schema v1、只追加约束、revision／检查点、关闭数据库后恢复与源链递归读取。
-- 合成边界／安全测试；显式私有真实回归，缺文件不会伪造。
+- **比较**：先检查期间、会计范围、单位和指标定义，无法对齐时显示不可比原因。
+- **追问**：区分对已验证证据的解释与需要新增取数的验证任务。
+- **保存**：保留命题版本、证据依赖、未决冲突、条件及研究检查点。
 
-日期冲突按**字段**生成：两个已核验期间、各两个字段形成四条日期冲突，不是四次独立供应商异常。回归中自动投影已核验的官网日期，审计者明确为自动规则；不伪造新的人工确认，供应商字段原因仍未决。
+相关设计可整理到 `docs/`，包含 PRD、UX 流程、来源选择与验收场景。
 
-如需人工保留未决或采用字段，在私有结果中取conflict／evidence ID，使用本地命令：
+## 十、合规与未完成事项
 
-```bash
-.venv/bin/python -m thesislab review --conflict '<local-conflict-id>' \
-  --reviewer '<operator-id>' --reason 'Keep unresolved pending source clarification'
-.venv/bin/python -m thesislab review --conflict '<local-conflict-id>' \
-  --reviewer '<operator-id>' --reason 'Use verified issuer-index date' \
-  --selected-evidence '<issuer-evidence-id>' --field original_disclosure_date
-.venv/bin/python -m thesislab trace --evidence '<local-evidence-id>'
-```
+- **金融数据**：扶摇 API 的公开展示、长期留存及再分发权限尚未获得充分确认；不在公开仓库存放其原始响应及受限材料。
+- **真实性**：LLM 输出不等于事实；财务字段的逐分匹配仅在已核验样本与既定口径内成立。
+- **时间有效性**：已识别供应商日期异常，尚不支持严格历史 point-in-time 回放。
+- **产品边界**：不提供投资评级、目标价、交易执行或收益承诺。
+- **交付边界**：目前未在本 README 中提供已验证可用的 Web URL；Web 部署和演示视频应以实际完成情况另行更新。
 
-命令仅写私有数据库／输出，不能修改原始字段。日期采用依据后原因仍未决；对同口径数字冲突可以显式 `--resolve`，必须有审核理由和所选证据，原数两侧均保留。
+---
 
-## 明确未实现
-
-LLM／Agent工作流、比较与追问服务、变化条件监控、完整结论生成、Web前端／API、iFinD／扶摇在线适配、交易／评级、公开部署、历史PIT回放、多用户访问控制与PostgreSQL运行。M1的符号关系与单指标方向仅用于证据契约／回归，不等于完整研究判决系统。
-
-## 数据与许可
-
-Phase 3数据仅获准用于内部验证，公开展示／长期留存／二次使用权和供应商历史日期语义仍未完全确认。原始报告URL是来源，不授予API数据再分发权。`verified`表示所定义定位、范围与核验步骤通过，不保证发行人财务绝对真实；hash是完整性，不是真实性。
-
-所有应用代码为本项目自行实现，未Fork／复制参考项目、Prompt或受限资产。项目尚未选择开源许可证；公开可见性不应被描述为已有MIT／Apache授权。依赖许可和已知限制见[RIGHTS-AND-LICENSES](docs/RIGHTS-AND-LICENSES.md)。
-
-## 提交前检查
-
-```bash
-.venv/bin/python -m pip check
-.venv/bin/python tools/audit_staged.py \
-  --private-baseline-root ../ThesisLab-Phase3-Data-Validation
-```
-
-审计只读Git暂存内容，输出文件名／问题类型，不输出匹配内容；路径白名单排除JSON响应、PDF、数据库、环境文件和本地证据，另检测常见秘密／私人绝对路径与基准实际数字。它不是完整DLP或漏洞扫描。审计通过也不授权Push，首次Push仍需批准。
-
-数据库模型与迁移见[STORAGE](docs/STORAGE.md)；本次实际验证记录见[M1-REPORT](docs/M1-REPORT.md)。M1完成后停止，不自动进入M2/M3。
+**ThesisLab 的目标不是替投资者给出一个答案，而是让一个投资判断能够被拆解、检查、挑战，并在证据变化时被重新审视。**
