@@ -48,6 +48,21 @@ class EnvironmentTests(unittest.TestCase):
         for env in ({'THESISLAB_LLM_PROVIDER':'unknown'},{'THESISLAB_FINANCIAL_PROVIDER':'unknown'},{'THESISLAB_ALLOW_PUBLIC_DISCLOSURES':'maybe'}):
             with self.assertRaises(ContractError):ProviderSettings.from_environment('/nonexistent-test-env',environ=env)
 
+    def test_empty_process_secret_overrides_file_without_exposing_either_value(self):
+        with tempfile.TemporaryDirectory() as root:
+            path=Path(root)/'.env';path.write_text('THESISLAB_LLM_API_KEY=FILE_FIXTURE_SECRET\n')
+            settings=ProviderSettings.from_environment(path,environ={'THESISLAB_LLM_API_KEY':''})
+            self.assertFalse(settings.public()['model_configured'])
+            self.assertNotIn('FILE_FIXTURE_SECRET',json.dumps(settings.public()))
+
+    def test_compose_does_not_add_provider_overrides_or_bake_secrets_into_image(self):
+        root=Path(__file__).resolve().parents[1]
+        compose=(root/'compose.yaml').read_text();dockerfile=(root/'deploy/Dockerfile').read_text()
+        self.assertIn('env_file:',compose);self.assertIn('- .env',compose)
+        for name in ('THESISLAB_LLM_PROVIDER','THESISLAB_LLM_MODEL','THESISLAB_LLM_API_KEY','THESISLAB_FINANCIAL_API_KEY'):
+            self.assertNotIn(name,compose);self.assertNotIn(name,dockerfile)
+        self.assertNotIn('COPY .env',dockerfile)
+
 
 class AgentHTTPTests(unittest.TestCase):
     def setUp(self):

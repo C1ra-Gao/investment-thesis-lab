@@ -194,9 +194,9 @@ class Store:
         return object_id
 
     def put_calculation(self, calculation: Calculation) -> None:
-        from .finance import yoy, fiscal_yoy, gross_margin, margin_delta, cumulative_to_single
+        from .finance import yoy, fiscal_yoy, gross_margin, margin_delta, cumulative_to_single, cash_conversion
         operations = {"yoy": yoy, "fiscal_yoy": fiscal_yoy, "gross_margin": gross_margin, "margin_delta": margin_delta,
-                      "cumulative_to_single": cumulative_to_single}
+                      "cumulative_to_single": cumulative_to_single, "cash_conversion": cash_conversion}
         fn = operations.get(calculation.operation)
         if fn is None or len(calculation.inputs) != 2:
             raise ContractError("unknown_operation_or_input_count")

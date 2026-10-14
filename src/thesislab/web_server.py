@@ -112,7 +112,15 @@ def make_server(workspace, port=0, *, online=None, financial_tools=None, agent=N
                     if action=='compare':return self.result(agent.compare(task_id,body['other_id']))
                     if action=='revise':
                         parent=agent.get(task_id)
-                        return self.result(agent.create({**parent,**body,'parent_id':task_id}),201)
+                        return self.result(agent.create({**parent,**body,'parent_id':task_id,
+                            'schema_version':parent.get('schema_version',1)}),201)
+                    if action=='add-comparison':
+                        parent=agent.checked(task_id,body['version'])
+                        name=body.get('name','')
+                        if not isinstance(name,str) or not 0<len(name.strip())<=200:raise ContractError('comparison_object_name_required')
+                        return self.result(agent.create({'schema_version':2,'statement':parent['statement']+'\n新增比较对象：'+name.strip()+
+                            '\n请在同一命题维度比较，并保留原命题不能由单个指标证明的部分。',
+                            'parent_id':task_id,'documents':[]}),201)
                     return self.result({'error':'not_found'},404)
                 if path=="/api/tasks":return self.result(workspace.create(body["statement"]))
                 if path=="/api/research-plan":

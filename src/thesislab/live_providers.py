@@ -37,25 +37,32 @@ class LiveHTTP:
     def __init__(self):
         self.lock = threading.Lock()
         self.last = 0.0
+        self.local = threading.local()
 
     def request(self, url, *, headers=None, body=None, max_bytes=20_000_000):
+        self.local.receipt={'request_sent':False,'http_status':None}
         p = urlsplit(url)
         if p.scheme != 'https' or not p.hostname or p.username or p.password or p.port not in (None,443) or p.fragment:
             raise ContractError('https_url_required')
         if any(x in p.query.lower() for x in ('token=', 'api_key', 'apikey', 'password', 'signature=')):
             raise ContractError('credential_query_forbidden')
         addresses = {x[4][0] for x in socket.getaddrinfo(p.hostname,443,type=socket.SOCK_STREAM)}
-        if not addresses or any(not ipaddress.ip_address(x).is_global for x in addresses):
+        if not addresses or any(not self.address_allowed(url,x) for x in addresses):
             raise ContractError('private_network_source_forbidden')
+        self.local.receipt['network_route']='public_dns' if all(ipaddress.ip_address(x).is_global for x in addresses) else 'fixed_model_benchmark_dns_proxy'
         # Less than 2 req/sec per process, including SEC's documented fair access.
         with self.lock:
             time.sleep(max(0, .6 - (time.monotonic() - self.last)))
             self.last = time.monotonic()
         c = _PinnedHTTPS(p.hostname, sorted(addresses)[0], 60)
         try:
+            c.connect()
+            self.local.receipt['request_sent']=None  # Transmission outcome may be uncertain on error.
             c.request('POST' if body is not None else 'GET', p.path + ('?' + p.query if p.query else ''), body=body,
                       headers={'Accept-Encoding':'identity', **(headers or {})})
+            self.local.receipt['request_sent']=True
             r = c.getresponse()
+            self.local.receipt['http_status']=r.status
             data = r.read(max_bytes + 1)
             if len(data)>max_bytes: raise ContractError('response_too_large')
             if r.getheader('Content-Length') and int(r.getheader('Content-Length')) != len(data):
@@ -65,6 +72,25 @@ class LiveHTTP:
         except ContractError: raise
         except Exception as exc: raise ContractError('transport_'+type(exc).__name__) from None
         finally: c.close()
+
+    def address_allowed(self,url,address):return ipaddress.ip_address(address).is_global
+
+
+class ModelHTTP(LiveHTTP):
+    """Only exact server-owned model endpoints; TLS/SNI still verifies the provider.
+
+    Some local DNS proxies represent public hosts using 198.18/15 fake-IP mappings.
+    This range is admitted ONLY for registered model URLs. RFC1918, loopback,
+    link-local and arbitrary URLs remain denied; public data transport is unchanged.
+    """
+    def request(self,url,**kwargs):
+        if url not in MODEL_ENDPOINTS.values():raise ContractError('fixed_model_endpoint_required')
+        return super().request(url,**kwargs)
+
+    def address_allowed(self,url,address):
+        if url not in MODEL_ENDPOINTS.values():return False
+        ip=ipaddress.ip_address(address)
+        return ip.is_global or (ip.version==4 and ip in ipaddress.ip_network('198.18.0.0/15'))
 
 
 class ProviderSettings:
@@ -131,17 +157,32 @@ class ProviderSettings:
 
 
 class ChatModel:
-    def __init__(self, settings, http): self.settings=settings; self.http=http
+    def __init__(self, settings, http):
+        self.settings=settings; self.http=http; self.local=threading.local()
+
+    def request_metadata(self):
+        return dict(getattr(self.local,'metadata',{'usage':None,'request_sent':False}))
+
     def json(self, system, payload):
         s=self.settings.snapshot()
         if not s['model_key']: raise ContractError('configure_model_key_first')
+        self.local.metadata={'provider':s['provider'],'model':s['model'],'usage':None,'request_sent':False}
         body=json.dumps({'model':s['model'],'messages':[{'role':'system','content':system},
              {'role':'user','content':json.dumps(payload,ensure_ascii=False)}],
              'response_format':{'type':'json_object'},'temperature':0,'max_tokens':5000},ensure_ascii=False).encode()
-        raw=self.http.request(MODEL_ENDPOINTS[s['provider']],headers={
-             'Authorization':'Bearer '+s['model_key'],'Content-Type':'application/json'},body=body,max_bytes=500_000)
         try:
-            result=json.loads(raw)['choices'][0]['message']['content']
+            raw=self.http.request(MODEL_ENDPOINTS[s['provider']],headers={
+                 'Authorization':'Bearer '+s['model_key'],'Content-Type':'application/json'},body=body,max_bytes=500_000)
+        finally:
+            receipt=getattr(getattr(self.http,'local',None),'receipt',{})
+            self.local.metadata.update({k:receipt.get(k) for k in ('request_sent','http_status','network_route')})
+        try:
+            envelope=json.loads(raw)
+            usage=envelope.get('usage')
+            if isinstance(usage,dict):
+                self.local.metadata['usage']={k:usage[k] for k in ('prompt_tokens','completion_tokens','total_tokens')
+                    if type(usage.get(k)) is int and usage[k]>=0}
+            result=envelope['choices'][0]['message']['content']
             def unique(pairs):
                 d={}
                 for k,v in pairs:
@@ -233,7 +274,7 @@ class SECFinancial:
                     pointer=f'/facts/us-gaap/{tag}/units/USD/{index}/val'
                     scope=Scope(entity,metric,start,end,'USD','usd','consolidated',Basis.YTD,accounting='US_GAAP')
                     validate_sec_field(raw,pointer,scope,filed)
-                    source=Source(identifier('sec-facts-source',{'url':url,'at':acquired,'filed':row['filed']}),
+                    source=Source(identifier('sec-facts-source',{'url':url,'at':acquired,'filed':row['filed'],'pointer':pointer}),
                         str(raw.get('entityName',entity))+' SEC CompanyFacts',url,'sec_xbrl',
                         rights='public_SEC_companyfacts_private_research',disclosed_on=filed,disclosure_locator=pointer.rsplit('/',1)[0]+'/filed')
                     self.store.put_source(source)

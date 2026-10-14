@@ -110,6 +110,21 @@ def gross_margin(revenue: Evidence, costs: Evidence) -> Calculation:
                    (revenue, costs), value, scope)
 
 
+def cash_conversion(cash_flow: Evidence, profit: Evidence) -> Calculation:
+    """Cash flow / positive net income. A measure, not proof of overall earnings quality."""
+    _usable(cash_flow, profit)
+    _same(cash_flow, profit, metric=False)
+    if cash_flow.scope.metric!='operating_cash_flow' or profit.scope.metric!='net_profit':
+        raise CalculationError('wrong_cash_conversion_fields')
+    if cash_flow.scope.unit not in ('yuan','usd') or profit.value<=0:
+        raise CalculationError('cash_conversion_requires_positive_profit_and_currency_amounts')
+    with localcontext() as ctx:
+        ctx.prec,ctx.rounding=32,ROUND_HALF_EVEN
+        value=cash_flow.value/profit.value*100
+    scope=replace(profit.scope,metric='cash_conversion',unit='percent')
+    return _result('cash_conversion','operating_cash_flow/net_profit*100',(cash_flow,profit),value,scope)
+
+
 def margin_delta(current: Evidence, prior: Evidence) -> Calculation:
     _usable(current, prior)
     _year_pair(current, prior)

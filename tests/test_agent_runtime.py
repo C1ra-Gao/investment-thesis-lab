@@ -80,7 +80,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertNotIn('SYNTHETIC_SECRET_DO_NOT_EXPORT',json.dumps(s))
         store=Store(self.path)
         try:
-            recovered=AgentRuntime(store);self.assertEqual(recovered.get(s['id'])['report'],s['report'])
+            recovered=AgentRuntime(store,settings=ProviderSettings());self.assertEqual(recovered.get(s['id'])['report'],s['report'])
             self.assertFalse(recovered.settings.public()['model_configured'])
         finally:store.close()
 
