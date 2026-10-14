@@ -15,6 +15,15 @@ def upgrade(engine) -> None:
         raise ValueError("M1 currently supports SQLite only; PostgreSQL not validated")
     with engine.begin() as connection:
         existing = connection.exec_driver_sql("PRAGMA user_version").scalar_one()
+        if existing == 2:
+            # M2 performs its own additive migration; never downgrade its head.
+            from .research_store import metadata, versions
+            from sqlalchemy import inspect, select
+            if not set(metadata.tables) <= set(inspect(connection).get_table_names()):
+                raise ValueError("incomplete_research_migration")
+            if connection.execute(select(versions.c.version)).scalar_one() != 2:
+                raise ValueError("invalid_research_schema_history")
+            return
         if existing not in (0, VERSION):
             raise ValueError("unsupported_database_schema_version")
         Base.metadata.create_all(connection)

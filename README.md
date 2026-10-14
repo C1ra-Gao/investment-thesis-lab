@@ -1,8 +1,8 @@
-# ThesisLab — M1 local evidence core
+# ThesisLab — local evidence and thesis verification
 
-ThesisLab is an investment thesis verification workspace. **This repository currently implements only M1:** offline evidence provenance, deterministic financial calculations, conflict detection, field-level review and local recovery. It is not a chatbot, investment rating service, Web application or trading system.
+ThesisLab is an investment thesis verification workspace. **M1 provides the trusted evidence core; M2 adds an offline, human-reviewed claim graph, research plans, three-state conclusions and change conditions.** General LLM decomposition is not implemented or tested. It is not an investment rating service, Web application or trading system.
 
-正式仓库：<https://github.com/C1ra-Gao/investment-thesis-lab>。M1在本地开发；首次Push须用户另行批准。
+正式仓库：<https://github.com/C1ra-Gao/investment-thesis-lab>。经批准的M1提交已正常推送并核对SHA；M2仅在本地，未获推送许可。
 
 ## 安装与运行
 
@@ -83,7 +83,27 @@ THESISLAB_PHASE3_ROOT=../ThesisLab-Phase3-Data-Validation \
 
 ## 明确未实现
 
-LLM／Agent工作流、比较与追问服务、变化条件监控、完整结论生成、Web前端／API、iFinD／扶摇在线适配、交易／评级、公开部署、历史PIT回放、多用户访问控制与PostgreSQL运行。M1的符号关系与单指标方向仅用于证据契约／回归，不等于完整研究判决系统。
+通用LLM语义拆解及真实模型质量评测、Agent工作流、比较与追问服务、后台变化监控、Web前端／API、iFinD／扶摇在线适配、交易／评级、公开部署、历史PIT回放、多用户访问控制与PostgreSQL运行。人工确认非数值证据方向是审核记录，不是机器证明因果／归因。
+
+## M2 离线研究流程
+
+用户本次选择暂不调用模型。不会用固定案例解析器或Mock回答替代通用LLM。可人工建立候选图，或导入外部候选后人工审查；来源模式会保存。精确候选契约、JSON例子和CLI流程见 [M2-USAGE](docs/M2-USAGE.md)。
+
+```bash
+.venv/bin/python -m thesislab draft --thesis local-research \
+  --input .local/draft.json --origin manual
+.venv/bin/python -m thesislab confirm --draft '<draft-id>' \
+  --reviewer '<operator>' --meaning-reviewed
+.venv/bin/python -m thesislab evaluate --confirmation '<confirmation-id>' \
+  --bindings .local/bindings.json --reviewer '<operator>' --as-of 2026-10-14
+.venv/bin/python -m thesislab research-show --thesis local-research
+```
+
+`draft.json`需要由研究者按契约填写，不是将自然语言自动转换成图。先保存拆解候选，只有关键歧义未回答时才阻止确认；计划的支持／反证任务、竞争解释及变化条件单独保存。修改后重新导入 `draft --parent-confirmation '<id>' --reason '...'`，确认后新运行；原始证据、旧结论保留。`research-show`可恢复完整候选、确认、计划、运行与条件检查历史。
+
+M2自动判断针对已确认的精确数值谓词；AND／OR／必要条件按规则组合，不平均置信度。预测未到观察期限保持无法验证；机制不从事实前提自动获支持。CLI使用既有M1证据ID，不能传入数字或模型文本当新可信事实。变化条件产生有记录的变化建议／重验需求，不能覆盖旧结论。
+
+M2首次研究操作显式追加SQLite v2表，M1原表／schema_version=1留作历史；M1 CLI识别v2不会降级。当前是单用户本地工具。实际结果见 [M2-REPORT](docs/M2-REPORT.md)。
 
 ## 数据与许可
 
@@ -99,6 +119,6 @@ Phase 3数据仅获准用于内部验证，公开展示／长期留存／二次�
   --private-baseline-root ../ThesisLab-Phase3-Data-Validation
 ```
 
-审计只读Git暂存内容，输出文件名／问题类型，不输出匹配内容；路径白名单排除JSON响应、PDF、数据库、环境文件和本地证据，另检测常见秘密／私人绝对路径与基准实际数字。它不是完整DLP或漏洞扫描。审计通过也不授权Push，首次Push仍需批准。
+审计只读Git暂存内容，输出文件名／问题类型，不输出匹配内容；路径白名单排除JSON响应、PDF、数据库、环境文件和本地证据，另检测常见秘密／私人绝对路径与基准实际数字。它不是完整DLP或漏洞扫描。审计通过也不授权新Push；M2推送仍需另获批准。
 
-数据库模型与迁移见[STORAGE](docs/STORAGE.md)；本次实际验证记录见[M1-REPORT](docs/M1-REPORT.md)。M1完成后停止，不自动进入M2/M3。
+数据库模型与迁移见[STORAGE](docs/STORAGE.md)；M1历史验证记录见[M1-REPORT](docs/M1-REPORT.md)。本次M2完成后停止，不自动进入M3。

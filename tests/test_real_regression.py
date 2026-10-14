@@ -110,3 +110,62 @@ class RealRegressionTests(unittest.TestCase):
     def test_missing_material_fails_instead_of_using_synthetic_data(self):
         with tempfile.TemporaryDirectory() as missing:
             with self.assertRaises(MissingMaterial):verify_phase3(Path(missing), self.store)
+
+    def m2_confirmation(self):
+        # Human-authored graph constructed from actual M1 IDs/scopes, never a
+        # canned model answer. Private numeric inputs remain outside source.
+        import json
+        from thesislab.domain import encode
+        from thesislab.research_store import ResearchEngine
+        from tests.research_helpers import node
+        engine = ResearchEngine(self.store)
+        original = "已定义的两个报告期合并营业收入同比增长且毛利率同比改善。"
+        claims = [node("root", original, original, rule="and")]
+        tasks, edges, bindings = [], [], {}
+        for assessment in self.result["assessments"]:
+            i, e = assessment["subclaim_id"], self.store.evidence(assessment["evidence_id"])
+            predicate = {"scope": json.loads(encode(e.scope)), "operator": "gt", "threshold": "0"}
+            claims.append(node(i, i + "对应的已定义财务变化大于零。", original, pred=predicate))
+            edges.append({"from_id": i, "to_id": "root", "kind": "and"})
+            for purpose in ("support", "refute"):
+                task_id = i + "-" + purpose
+                tasks.append({"id": task_id, "claim_id": i, "purpose": purpose, "action": "核验当前已披露财务变化。",
+                    "source_requirement": "Phase 3 已核验的本地官方材料与计算。", "capability": "local_verified",
+                    "acceptance": "完整财报字段与期间定位、Decimal计算；未知供应商日期原因不清除。"})
+            bindings[i + "-support"] = {"evidence_id": e.id}
+        design = {"statement": original, "root_id": "root", "claims": claims, "relations": edges,
+                  "clarifications": [], "tasks": tasks, "conditions": []}
+        draft = engine.draft("private-m2-regression", design, origin="manual")
+        confirmed = engine.confirm(draft, reviewer="test-human-authored-design", meaning_reviewed=True,
+            accepted_suggestions=[], budget={"llm_calls": 0, "financial_calls": 0})
+        return engine, confirmed, bindings
+
+    def test_m2_real_combined_conclusion_and_source_closure(self):
+        engine, confirmed, bindings = self.m2_confirmation()
+        with patch("socket.socket.connect", side_effect=AssertionError("network forbidden")):
+            run_id = engine.evaluate(confirmed, bindings, reviewer="regression-rule-check", as_of="2026-10-14")
+        run = engine.get(run_id)
+        self.assertEqual(run["conclusion"]["state"], "opposes")
+        states = [r["state"] for i, r in run["claims"].items() if i != "root"]
+        self.assertEqual(states.count("supports"), 2)
+        self.assertEqual(states.count("opposes"), 2)
+        self.assertGreater(len(run["conclusion"]["evidence_dependencies"]), 4)
+        self.assertEqual(run["usage"]["financial_calls"], 0)
+        self.assertTrue(all(self.store.evidence(i) for i in run["conclusion"]["evidence_dependencies"]))
+
+    def test_m2_prior_as_of_rejects_later_disclosure_not_historical_replay(self):
+        engine, confirmed, bindings = self.m2_confirmation()
+        run = engine.get(engine.evaluate(confirmed, bindings, reviewer="test", as_of="2025-01-01"))
+        self.assertTrue(all(r["state"] == "unverifiable" for r in run["claims"].values()))
+
+    def test_m2_reopen_keeps_original_data_and_unresolved_date_conflicts(self):
+        engine, confirmed, bindings = self.m2_confirmation()
+        run_id = engine.evaluate(confirmed, bindings, reviewer="test", as_of="2026-10-14")
+        reopened = Store(self.path)
+        try:
+            from thesislab.research_store import ResearchEngine
+            recovered = ResearchEngine(reopened).get(run_id)
+            self.assertEqual(recovered, engine.get(run_id))
+            self.assertEqual(reopened.restore(self.result["task_id"])["revision"]["id"], self.result["revision_id"])
+            self.assertTrue(all(c["state"] == "unresolved" for c in reopened.restore(self.result["task_id"])["conflicts"]))
+        finally:reopened.close()
