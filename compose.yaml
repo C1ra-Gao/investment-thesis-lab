@@ -1,0 +1,17 @@
+services:
+  workspace:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    command: ["python", "-m", "thesislab.agent_server", "--port", "8767", "--container-local"]
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8767:8767"
+    volumes:
+      - research:/app/.local
+    restart: unless-stopped
+    init: true
+    security_opt: ["no-new-privileges:true"]
+volumes:
+  research:

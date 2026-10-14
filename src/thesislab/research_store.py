@@ -31,7 +31,7 @@ def upgrade_research(engine):
         c.exec_driver_sql("BEGIN IMMEDIATE")
         try:
             version = c.exec_driver_sql("PRAGMA user_version").scalar_one()
-            if version not in (1, 2):raise ContractError("unsupported_research_schema")
+            if version not in (1, 2, 3):raise ContractError("unsupported_research_schema")
             if version == 1:
                 metadata.create_all(c)
                 c.execute(versions.insert().values(version=2, recorded_at=now()))
@@ -222,6 +222,10 @@ class ResearchEngine:
             if any(r["state"] == "opposes" for r in necessities):state, reason = "opposes", "necessary_premise_refuted"
             elif necessities and any(r["state"] != "supports" for r in necessities) and state == "supports":
                 state, reason = "unverifiable", "necessary_premise_unverified"
+            if node["kind"] == "forecast":
+                horizon = node["qualifiers"].get("forecast_end")
+                if horizon is None or date.fromisoformat(horizon) > as_of_date:
+                    state, reason = "unverifiable", "forecast_not_observed"
             results[i] = {"state": state, "reason": reason, "evidence_dependencies": dependencies,
                           "observations": obs, "children": children}
             return results[i]

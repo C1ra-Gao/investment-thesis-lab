@@ -71,12 +71,36 @@ def yoy(current: Evidence, prior: Evidence) -> Calculation:
     return _result("yoy", "(current/prior-1)*100", (current, prior), value, scope)
 
 
+def fiscal_yoy(current: Evidence, prior: Evidence) -> Calculation:
+    """Explicit 52/53-week annual US-GAAP comparison; not calendar YTD alignment."""
+    _usable(current, prior)
+    _same(current, prior, period=False)
+    if current.scope.accounting != 'US_GAAP' or current.scope.basis != Basis.YTD:
+        raise CalculationError('fiscal_yoy_requires_us_gaap_annual_flows')
+    for item in (current, prior):
+        if not 330 <= (item.scope.end-item.scope.start).days+1 <= 380:
+            raise CalculationError('fiscal_yoy_requires_full_annual_periods')
+    if current.scope.end.year != prior.scope.end.year+1:
+        raise CalculationError('fiscal_yoy_requires_adjacent_years')
+    for field in ('start','end'):
+        a,b=getattr(current.scope,field),getattr(prior.scope,field)
+        if not 350 <= (a-b).days <= 380:
+            raise CalculationError('fiscal_year_boundaries_not_aligned')
+    if prior.value<=0:raise CalculationError('non_positive_prior_denominator')
+    with localcontext() as ctx:
+        ctx.prec,ctx.rounding=32,ROUND_HALF_EVEN
+        value=(current.value/prior.value-1)*100
+    scope=replace(current.scope,metric=current.scope.metric+'_yoy',unit='percent')
+    return _result('fiscal_yoy','(current_fiscal_annual/prior_fiscal_annual-1)*100; 52/53-week years may differ in length',
+                   (current,prior),value,scope)
+
+
 def gross_margin(revenue: Evidence, costs: Evidence) -> Calculation:
     _usable(revenue, costs)
     _same(revenue, costs, metric=False)
     if revenue.scope.metric != "operating_income" or costs.scope.metric != "operating_costs":
         raise CalculationError("wrong_gross_margin_fields")
-    if revenue.scope.unit != "yuan" or revenue.value <= 0:
+    if revenue.scope.unit not in ("yuan", "usd") or revenue.value <= 0:
         raise CalculationError("invalid_revenue_denominator_or_unit")
     with localcontext() as ctx:
         ctx.prec, ctx.rounding = 32, ROUND_HALF_EVEN

@@ -139,7 +139,8 @@ class EngineTests(unittest.TestCase):
     def test_necessary_premise_can_refute_causal(self):
         self.store.put_evidence(fact("n", "-1"))
         run = self.evaluate(self.confirm(design(kind="causal")), {"a-refute": {"evidence_id": "n"}})
-        self.assertEqual(run["claims"]["b"]["reason"], "necessary_premise_refuted")
+        self.assertEqual(run["claims"]["b"]["reason"], "forecast_not_observed")
+        self.assertEqual(run["claims"]["m"]["reason"], "necessary_premise_refuted")
     def test_no_human_confirmation_cannot_promote_numeric_fact_to_attribution(self):
         self.store.put_evidence(fact("p"))
         with self.assertRaises(ContractError):self.evaluate(self.confirm(design(kind="attribution")),

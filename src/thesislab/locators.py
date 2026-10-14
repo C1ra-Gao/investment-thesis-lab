@@ -60,7 +60,11 @@ def verify_pdf_scope(body: bytes, locator: Locator, scope: Scope) -> None:
     if scope.consolidation != "consolidated" or locator.table != "合并利润表":
         raise ContractError("pdf_consolidation_not_aligned")
     ranges = re.findall(r"(\d{4})年(\d{1,2})[—－\-–至](\d{1,2})月", text)
-    if not any(scope.start.month == int(start) and scope.end.month == int(end)
+    annual = (scope.start.month == 1 and scope.start.day == 1 and scope.end.month == 12 and scope.end.day == 31
+              and scope.start.year == scope.end.year
+              and re.sub(r'\s+', '', locator.column) == str(scope.end.year)+'年度'
+              and str(scope.end.year)+'年度' in text)
+    if not annual and not any(scope.start.month == int(start) and scope.end.month == int(end)
                and scope.start.day == 1 and scope.end.day == calendar.monthrange(scope.end.year, scope.end.month)[1]
                and scope.start.year == scope.end.year and scope.end.year in (int(year), int(year) - 1)
                for year, start, end in ranges):
