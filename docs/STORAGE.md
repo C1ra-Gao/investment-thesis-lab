@@ -28,6 +28,14 @@ M1采用SQLite＋SQLAlchemy；用户的本阶段授权替代ADR中首版产品Po
 
 ## 限制
 
+### M2 additive schema v2
+
+M2第一次构造ResearchEngine时运行 `research_store.upgrade_research`：显式BEGIN IMMEDIATE、创建research_records和research_schema_history、写入v2记录、安装UPDATE/DELETE保护、更新PRAGMA user_version=2并提交；失败回滚。不改变M1字段、原数据或schema_version=1行；该行表示v1历史，不表示当前head。Store重开识别v2并核对v2表及历史，不降级。
+
+research_records存draft/confirmation/run/condition_check的不可变JSON快照；parent_id是自身外键，设计修订父confirmation必须同thesis。每个运行绑定已确认的固定设计，保存任务输入／证据依赖闭包、三态、冲突与裁决快照、审核者、时间、缺口和用量。ConditionCheck不改旧Run。写记录与审计同事务；history按thesis读取完整快照，get按ID精确恢复。这里不是在线任务队列，也没有并发头指针、多用户ACL或自动采集。
+
+M2新增表使用SQLAlchemy Core metadata，M1 ORM保持原样；这仍是简单SQLite存储。M2结论的证据ID必须由M1 Store读取，计算输入递归追溯；不用JSON中模型自造数值直接判定。迁移及关闭重开恢复通过离线与真实回归测试；正式PostgreSQL迁移仍未验证。
+
 本地SQLite文件未加密，不是WORM存储／防管理员篡改系统。持有文件权限的管理员仍可移除触发器或重写数据库；raw hash只提供一致性检测。保护针对正常应用／SQL操作，不能承诺绝对不可变。原始材料删除／保留策略仍受许可要求约束。
 
 未来PostgreSQL需迁移BLOB存储、JSON／金额约束、immutable权限／触发器和版本工具并重跑全部测试；未验证这些迁移。不得为M1提前引入图数据库、分布式队列或服务部署。

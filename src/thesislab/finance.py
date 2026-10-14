@@ -71,12 +71,36 @@ def yoy(current: Evidence, prior: Evidence) -> Calculation:
     return _result("yoy", "(current/prior-1)*100", (current, prior), value, scope)
 
 
+def fiscal_yoy(current: Evidence, prior: Evidence) -> Calculation:
+    """Explicit 52/53-week annual US-GAAP comparison; not calendar YTD alignment."""
+    _usable(current, prior)
+    _same(current, prior, period=False)
+    if current.scope.accounting != 'US_GAAP' or current.scope.basis != Basis.YTD:
+        raise CalculationError('fiscal_yoy_requires_us_gaap_annual_flows')
+    for item in (current, prior):
+        if not 330 <= (item.scope.end-item.scope.start).days+1 <= 380:
+            raise CalculationError('fiscal_yoy_requires_full_annual_periods')
+    if current.scope.end.year != prior.scope.end.year+1:
+        raise CalculationError('fiscal_yoy_requires_adjacent_years')
+    for field in ('start','end'):
+        a,b=getattr(current.scope,field),getattr(prior.scope,field)
+        if not 350 <= (a-b).days <= 380:
+            raise CalculationError('fiscal_year_boundaries_not_aligned')
+    if prior.value<=0:raise CalculationError('non_positive_prior_denominator')
+    with localcontext() as ctx:
+        ctx.prec,ctx.rounding=32,ROUND_HALF_EVEN
+        value=(current.value/prior.value-1)*100
+    scope=replace(current.scope,metric=current.scope.metric+'_yoy',unit='percent')
+    return _result('fiscal_yoy','(current_fiscal_annual/prior_fiscal_annual-1)*100; 52/53-week years may differ in length',
+                   (current,prior),value,scope)
+
+
 def gross_margin(revenue: Evidence, costs: Evidence) -> Calculation:
     _usable(revenue, costs)
     _same(revenue, costs, metric=False)
     if revenue.scope.metric != "operating_income" or costs.scope.metric != "operating_costs":
         raise CalculationError("wrong_gross_margin_fields")
-    if revenue.scope.unit != "yuan" or revenue.value <= 0:
+    if revenue.scope.unit not in ("yuan", "usd") or revenue.value <= 0:
         raise CalculationError("invalid_revenue_denominator_or_unit")
     with localcontext() as ctx:
         ctx.prec, ctx.rounding = 32, ROUND_HALF_EVEN
@@ -84,6 +108,21 @@ def gross_margin(revenue: Evidence, costs: Evidence) -> Calculation:
     scope = replace(revenue.scope, metric="gross_margin", unit="percent")
     return _result("gross_margin", "(operating_income-operating_costs)/operating_income*100",
                    (revenue, costs), value, scope)
+
+
+def cash_conversion(cash_flow: Evidence, profit: Evidence) -> Calculation:
+    """Cash flow / positive net income. A measure, not proof of overall earnings quality."""
+    _usable(cash_flow, profit)
+    _same(cash_flow, profit, metric=False)
+    if cash_flow.scope.metric!='operating_cash_flow' or profit.scope.metric!='net_profit':
+        raise CalculationError('wrong_cash_conversion_fields')
+    if cash_flow.scope.unit not in ('yuan','usd') or profit.value<=0:
+        raise CalculationError('cash_conversion_requires_positive_profit_and_currency_amounts')
+    with localcontext() as ctx:
+        ctx.prec,ctx.rounding=32,ROUND_HALF_EVEN
+        value=cash_flow.value/profit.value*100
+    scope=replace(profit.scope,metric='cash_conversion',unit='percent')
+    return _result('cash_conversion','operating_cash_flow/net_profit*100',(cash_flow,profit),value,scope)
 
 
 def margin_delta(current: Evidence, prior: Evidence) -> Calculation:

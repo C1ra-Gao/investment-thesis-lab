@@ -120,17 +120,31 @@ class Store:
             source = self._payload(SourceRecord, artifact["source_id"])
             if item.origin == "synthetic_test" and source["kind"] != "synthetic_test":
                 raise ContractError("synthetic_input_requires_synthetic_source")
-            expected = (json_value(artifact["body"], item.locator.json_pointer)
-                        if item.locator.json_pointer else pdf_value(artifact["body"], item.locator))
+            if source['kind'] == 'sec_xbrl' and item.locator.json_pointer:
+                cursor = json.loads(artifact['body'], parse_float=Decimal)
+                for part in item.locator.json_pointer.split('/')[1:]:
+                    cursor = cursor[int(part)] if isinstance(cursor, list) else cursor[part]
+                from .domain import amount
+                expected = amount(cursor)
+            else:
+                expected = (json_value(artifact["body"], item.locator.json_pointer)
+                            if item.locator.json_pointer else pdf_value(artifact["body"], item.locator))
             if item.value != expected:
                 raise ContractError("evidence_value_does_not_match_raw_locator")
             if item.origin == "issuer":
-                if (source["kind"] != "issuer_report" or item.issuer_disclosure_date is None
+                if (source["kind"] not in ("issuer_report", "sec_xbrl") or item.issuer_disclosure_date is None
                         or source["disclosed_on"] != item.issuer_disclosure_date.isoformat()):
                     raise ContractError("issuer_date_does_not_match_source_metadata")
-                if item.locator.page is None:
+                if source['kind'] == 'sec_xbrl':
+                    from .live_providers import validate_sec_field
+                    if not source['url'].startswith('https://data.sec.gov/api/xbrl/companyfacts/CIK'):
+                        raise ContractError('invalid_sec_source_url')
+                    validate_sec_field(json.loads(artifact['body']), item.locator.json_pointer,
+                                       item.scope, item.issuer_disclosure_date)
+                elif item.locator.page is None:
                     raise ContractError("M1_issuer_financial_field_requires_pdf_locator")
-                verify_pdf_scope(artifact["body"], item.locator, item.scope)
+                else:
+                    verify_pdf_scope(artifact["body"], item.locator, item.scope)
             elif item.origin == "provider":
                 if source["kind"] != "provider_cache" or not item.locator.json_pointer:
                     raise ContractError("provider_field_requires_cached_json_source")
@@ -180,9 +194,9 @@ class Store:
         return object_id
 
     def put_calculation(self, calculation: Calculation) -> None:
-        from .finance import yoy, gross_margin, margin_delta, cumulative_to_single
-        operations = {"yoy": yoy, "gross_margin": gross_margin, "margin_delta": margin_delta,
-                      "cumulative_to_single": cumulative_to_single}
+        from .finance import yoy, fiscal_yoy, gross_margin, margin_delta, cumulative_to_single, cash_conversion
+        operations = {"yoy": yoy, "fiscal_yoy": fiscal_yoy, "gross_margin": gross_margin, "margin_delta": margin_delta,
+                      "cumulative_to_single": cumulative_to_single, "cash_conversion": cash_conversion}
         fn = operations.get(calculation.operation)
         if fn is None or len(calculation.inputs) != 2:
             raise ContractError("unknown_operation_or_input_count")

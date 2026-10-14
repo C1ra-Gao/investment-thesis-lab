@@ -21,7 +21,7 @@ def private_output(value: str) -> Path:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(prog="thesislab", description="M1 local evidence verification (no network)")
+    parser = argparse.ArgumentParser(prog="thesislab", description="Local evidence and thesis verification (no network)")
     commands = parser.add_subparsers(dest="command", required=True)
     init = commands.add_parser("init-db")
     init.add_argument("--db", default=".local/thesislab.sqlite")
@@ -45,6 +45,35 @@ def main(argv=None) -> int:
     review.add_argument("--selected-evidence")
     review.add_argument("--field", choices=("original_disclosure_date", "value", "scope"))
     review.add_argument("--resolve", action="store_true", help="Only for a fully resolved non-date conflict")
+    draft = commands.add_parser("draft", help="Import a human-authored or externally produced candidate; not AI parsing")
+    draft.add_argument("--input", required=True)
+    draft.add_argument("--thesis", required=True)
+    draft.add_argument("--origin", choices=("manual", "model_candidate", "synthetic_test"), default="manual")
+    draft.add_argument("--parent-confirmation")
+    draft.add_argument("--reason")
+    confirm = commands.add_parser("confirm")
+    confirm.add_argument("--draft", required=True)
+    confirm.add_argument("--reviewer", required=True)
+    confirm.add_argument("--meaning-reviewed", action="store_true")
+    confirm.add_argument("--accept-suggestion", action="append", default=[])
+    run = commands.add_parser("evaluate")
+    run.add_argument("--confirmation", required=True)
+    run.add_argument("--bindings", required=True)
+    run.add_argument("--reviewer", required=True)
+    run.add_argument("--as-of", required=True)
+    check = commands.add_parser("check-condition")
+    check.add_argument("--confirmation", required=True)
+    check.add_argument("--condition", required=True)
+    check.add_argument("--reviewer", required=True)
+    check.add_argument("--observed-on", required=True)
+    check.add_argument("--evidence")
+    check.add_argument("--event", choices=("true", "false"))
+    check.add_argument("--reason")
+    show = commands.add_parser("research-show")
+    show.add_argument("--id")
+    show.add_argument("--thesis")
+    show.add_argument("--output", default=".local/research.json")
+    for p in (draft, confirm, run, check, show):p.add_argument("--db", default=".local/thesislab.sqlite")
     args = parser.parse_args(argv)
     store = None
     try:
@@ -76,16 +105,41 @@ def main(argv=None) -> int:
             result = store.trace(args.evidence)
             output.write_text(json.dumps(result, ensure_ascii=False, indent=2))
             print("Evidence lineage saved locally; no financial values printed.")
-        else:
+        elif args.command == "restore":
             output = private_output(args.output)
             result = store.restore(args.task)
             output.write_text(json.dumps(result, ensure_ascii=False, indent=2))
             print(json.dumps({"restored": True, "state": result["state"],
                               "conflicts": len(result["conflicts"]), "assessments": len(result["assessments"])}, ensure_ascii=False))
+        else:
+            from .research_store import ResearchEngine
+            engine = ResearchEngine(store)
+            if args.command == "draft":
+                data = json.loads(Path(args.input).read_text())
+                result_id = engine.draft(args.thesis, data, origin=args.origin,
+                                         parent_id=args.parent_confirmation, reason=args.reason)
+            elif args.command == "confirm":
+                result_id = engine.confirm(args.draft, reviewer=args.reviewer,
+                    meaning_reviewed=args.meaning_reviewed, accepted_suggestions=args.accept_suggestion,
+                    budget={"llm_calls": 0, "financial_calls": 0})
+            elif args.command == "evaluate":
+                result_id = engine.evaluate(args.confirmation, json.loads(Path(args.bindings).read_text()),
+                                            reviewer=args.reviewer, as_of=args.as_of)
+            elif args.command == "check-condition":
+                result_id = engine.check_condition(args.confirmation, args.condition, reviewer=args.reviewer,
+                    observed_on=args.observed_on, evidence_id=args.evidence,
+                    event_occurred=None if args.event is None else args.event == "true", reason=args.reason)
+            else:
+                if bool(args.id) == bool(args.thesis):raise ContractError("select_one_record_or_thesis")
+                result = engine.get(args.id) if args.id else engine.history(args.thesis)
+                private_output(args.output).write_text(json.dumps(result, ensure_ascii=False, indent=2))
+                print("Research snapshot/history restored to ignored local output.")
+                return 0
+            print(json.dumps({"saved": True, "id": result_id}))
         return 0
-    except (ContractError, KeyError, OSError, ValueError, SQLAlchemyError) as exc:
+    except (ContractError, KeyError, OSError, ValueError, TypeError, SQLAlchemyError) as exc:
         # Never dump input files, financial values or an uncontrolled traceback to stdout.
-        print("M1 command failed:", type(exc).__name__)
+        print("Local command failed:", type(exc).__name__, str(exc) if isinstance(exc, ContractError) else "")
         return 1
     finally:
         if store:

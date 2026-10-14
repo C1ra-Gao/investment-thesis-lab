@@ -13,9 +13,12 @@ import sys
 
 
 def findings(path: str, content: bytes, private_values: set[str] | None = None) -> list[str]:
-    allowed_exact = {"README.md", ".gitignore", ".env.example", "pyproject.toml", "requirements.lock"}
+    allowed_exact = {"README.md", ".gitignore", ".dockerignore", ".env.example", "pyproject.toml", "requirements.lock", "compose.yaml"}
     allowed_tree = ((path.startswith(("src/", "tests/", "tools/")) and path.endswith(".py"))
-                    or (path.startswith("docs/") and path.endswith(".md")))
+                    or (path.startswith("docs/") and path.endswith(".md"))
+                    or path in {"src/thesislab/web/index.html","src/thesislab/web/app.js","src/thesislab/web/style.css",
+                        "src/thesislab/web/research.html","src/thesislab/web/research.js","src/thesislab/web/research.css",
+                        "deploy/Dockerfile","deploy/Caddyfile","tools/web_e2e.mjs","tools/v1_e2e.mjs"})
     issues = []
     if path not in allowed_exact and not allowed_tree:
         issues.append("path_not_in_public_source_allowlist")
@@ -40,7 +43,15 @@ def findings(path: str, content: bytes, private_values: set[str] | None = None) 
             if isinstance(node, ast.Import):imports.extend(a.name for a in node.names)
             elif isinstance(node, ast.ImportFrom):imports.append(node.module or "")
         banned = ("requests", "http.client", "urllib.request", "socket", "subprocess", "openai", "keyring")
-        if any(name == prefix or name.startswith(prefix + ".") for name in imports for prefix in banned):
+        # Explicit live-provider adapters are authorized in the MVP; other modules
+        # remain offline. Secret/private-content checks still apply to every file.
+        exceptions = {"src/thesislab/deepseek_transport.py": {"http.client"},
+                      "src/thesislab/online_transport.py": {"http.client","socket"},
+                      "src/thesislab/live_providers.py": {"http.client","socket"},
+                      "src/thesislab/deploy_gateway.py": {"http.client"},
+                      "src/thesislab/deepseek_keychain.py": {"subprocess"}}
+        if any((name == prefix or name.startswith(prefix + ".")) and name not in exceptions.get(path, set())
+               for name in imports for prefix in banned):
             issues.append("network_credential_or_process_client_in_runtime")
     return issues
 

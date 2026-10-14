@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "thesislab"
-version = "0.1.0"
-description = "M1 offline evidence provenance and deterministic financial verification"
+version = "0.2.0"
+description = "Offline evidence provenance and human-reviewed investment thesis verification"
 requires-python = ">=3.12"
 dependencies = ["SQLAlchemy==2.0.44"]
 
@@ -17,3 +17,6 @@ thesislab = "thesislab.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+thesislab = ["web/*.html", "web/*.js", "web/*.css"]

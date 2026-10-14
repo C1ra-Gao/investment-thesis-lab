@@ -239,3 +239,15 @@ real-data/
 .env
 .env.*
 !.env.example
+
+# macOS metadata is not part of the delivery.
+.DS_Store
+
+# Only reviewed synthetic demo assets are intended for the README.
+docs/assets/readme/*
+!docs/assets/readme/entry-synthetic.jpg
+!docs/assets/readme/clarification-synthetic.jpg
+!docs/assets/readme/plan-synthetic.jpg
+!docs/assets/readme/workspace-synthetic.jpg
+!docs/assets/readme/evidence-synthetic.jpg
+!docs/assets/readme/library-synthetic.jpg

@@ -1,0 +1,12 @@
+.git
+.local
+.private
+.venv
+private-data
+real-data
+*.pdf
+*.sqlite*
+.env*
+tests
+tools
+__pycache__
