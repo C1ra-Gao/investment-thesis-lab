@@ -239,3 +239,6 @@ real-data/
 .env
 .env.*
 !.env.example
+
+# macOS metadata is not part of the delivery.
+.DS_Store
