@@ -1,46 +1,83 @@
-# ThesisLab — Investment Thesis Verification Agent MVP
+<div align="center">
 
-## 1. Product Overview
+# ThesisLab
 
-ThesisLab 是面向投资研究的 AI Agent：将自然语言投资命题转化为可验证子问题，通过可用工具收集证据，形成支持、反对与无法验证的研究记录，并明确结论的修订条件。
+**An investment research agent that turns theses into verifiable questions.**
 
-目标用户是需要审查判断依据的投资研究者、分析师及产品评审。普通金融问答主要提供文字答案；ThesisLab 让用户检查研究范围、计划、实际工具调用、原始证据、计算过程和缺口。模型生成计划不等于命题成立，工具连接成功也不等于数据已核验。
+用自然语言提出投资命题，与 Agent 一起规划研究、检查反证、追溯证据。
 
-当前交付为**单用户本地 Web 产品**。源码位于 [GitHub 开发分支](https://github.com/C1ra-Gao/investment-thesis-lab/tree/feat/thesislab-agent-mvp)，保留原有技术资料与实现。真实模型规划已执行；真实金融数据与公开披露的在线端到端验收尚未通过。
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB)](pyproject.toml) [![Local MVP](https://img.shields.io/badge/Status-Local%20MVP-39736B)](#development-status)
 
-## 2. Key Features
+[Quick Start](#quick-start) · [Product Demo](#product-demo) · [Documentation](#documentation)
 
-- **自然语言入口**：无需先填写股票代码、CIK、年份或报告期，可提出单公司、多公司、估值、产业链、宏观和行业命题。实体解析范围有限，未解析主体不会使用模型猜测的代码查询。
-- **理解与澄清**：LLM 提取对象、时间、评价标准与歧义，关键问题未回答时暂停；用户可以编辑研究范围。
-- **动态计划**：独立 Plan 调用生成最多 12 个子问题，包含支持/反证检验、来源要求和判断改变条件；可修改、删除、补充后确认执行。
-- **执行记录**：按对象、期间和指标编译工具任务，保存参数、状态、错误与结果来源；不支持的任务保留能力缺口。
-- **Evidence Workspace**：逐个子命题展示支持、反对、无法验证，区分原始事实、确定性计算和模型推断；保留来源与口径冲突。
-- **研究延续**：基于已有上下文追问、修订命题、加入比较对象、检查已完成研究的数值可比性；自动保存、重新打开及导出研究记录。
+</div>
 
-完整交互链路已通过合成浏览器验收；这些结果不代表真实金融上游查询成功。真实 LLM 规划仍存在语义问题，见 Evaluation 和 Known Limitations。
+![ThesisLab 自然语言研究入口 — Synthetic Demo](docs/assets/readme/entry-synthetic.jpg)
 
-## 3. Product Workflow
+*真实产品界面 · Synthetic Demo：模型和金融数据均为合成夹具，仅展示交互流程。*
 
-**输入命题 → 理解与澄清 → 审核计划 → 执行与验证 → 结论 → 追问、修订或保存**。
+## Why ThesisLab?
 
-| 步骤 | 实际职责与用户操作 |
-| --- | --- |
-| Understand / Clarify | LLM 理解命题；关键歧义未解决时请用户回答。未说明时间可列出假设，不能冒称最新材料已核实。 |
-| Plan | LLM 提议子问题、工具和检验标准；程序校验结构与能力。用户审核意义、范围及必要/背景主张，编辑后确认执行。 |
-| Execute | 外部工具获取数据和原始材料，程序记录实际调用。付费工具需自己的授权账户；公开披露需单独同意。 |
-| Verify | 确定性程序检查来源位置、期间、单位与口径，计算指标、识别冲突并评估数值谓词。 |
-| Revise / Conclude | 有尚未查询的合法候选资料时，LLM 可选择最多两项补查，限一轮。结论按已核验的必要子问题汇总；缺口不由背景事实填补。 |
-| Continue | 追问标为模型推断；新命题或比较对象创建保留父任务的新研究。任务在本地持久化。 |
+> “Microsoft's valuation has declined, but its fundamentals remain intact.”
+>
+> 微软估值回落了，但基本面没有恶化——这个判断有哪些证据和盲点？
 
-整体判断使用必要条件合取：存在反证则反驳；仍有必要条件无法核验则无法验证。它不自动证明相反投资结论。数据缺失、工具失败、未决数值冲突、预测或因果问题超出能力时，返回明确错误或 `unverifiable`，不从模型记忆补齐金融事实。
+这样的命题同时涉及估值、经营表现和时间范围。ThesisLab 将它拆成可审查的研究问题：比较什么期间？用什么指标检验？什么材料会推翻判断？
 
-## 4. Quick Start
+你可以修改计划，再查看工具取得的证据及计算。即使某项财务指标得到支持，缺少估值资料时，整体命题仍会保留为**无法验证**。研究产物包括依据、反证、缺口和修订条件，帮助你继续研究。
 
-### 依赖与直接启动（已实际运行）
+## Features
 
-需要 Python **3.12+**、Git；SQLite 随 Python 提供。以下命令在仓库根目录执行，首次安装需要获取锁定依赖：
+### Natural Language Research
+
+直接输入公司、比较、估值、行业、产业链或宏观命题，无需先填代码和报告期。Agent 理解对象与范围，关键歧义通过澄清解决。
+
+### Dynamic Research Planning
+
+根据命题提出不同子问题，列出支持与反对检验、所需来源及判断改变条件。你可以修改、删除或补充问题，再确认执行。
+
+### Evidence-Backed Analysis
+
+从实际工具结果建立来源链，查看原始位置、报告期、公式及输入。直接事实、确定性计算与模型推断分别标记。
+
+### Bull / Bear / Unverifiable
+
+逐个主张组织支持、反对和无法验证的证据。保留来源与口径冲突，缺失数据或工具失败不会被填成确定答案。
+
+### Interactive Research Workspace
+
+计划、工具记录、证据和结论放在同一工作区。继续追问、修改命题、加入比较对象，或保存后回来接着研究。
+
+## Product Demo
+
+以下截图通过**当前本地产品的真实浏览器操作**采集。全部为 **Synthetic Demo**，没有调用真实账户，截图中的数字不是公司实际财务数据。
+
+**审查计划、工具过程和证据缺口。**
+
+![研究工作区 — Synthetic Demo](docs/assets/readme/workspace-synthetic.jpg)
+
+<details>
+<summary>查看可编辑计划与证据结论</summary>
+
+**可编辑研究计划**：修改主张、对象、观察窗口、检验标准与来源要求，再确认执行。
+
+![可编辑研究计划 — Synthetic Demo](docs/assets/readme/plan-synthetic.jpg)
+
+**证据与结论**：演示中一个背景指标得到支持，但估值资料缺失，整体命题仍无法验证。
+
+![证据和无法验证结论 — Synthetic Demo](docs/assets/readme/evidence-synthetic.jpg)
+
+</details>
+
+[查看澄清、保存恢复及完整截图说明 →](docs/DEMO.md)
+
+## Quick Start
+
+需要 **Python 3.12+** 和 Git。在 macOS/Linux 终端运行：
 
 ```bash
+git clone --branch feat/thesislab-agent-mvp https://github.com/C1ra-Gao/investment-thesis-lab.git
+cd investment-thesis-lab
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.lock
 .venv/bin/python -m pip install --no-deps -e .
@@ -48,134 +85,48 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-已有 `.env` 时跳过复制，用终端编辑器填写配置，不在浏览器或聊天中输入 Key：
-
-```dotenv
-THESISLAB_LLM_PROVIDER=deepseek
-THESISLAB_LLM_MODEL=deepseek-chat
-THESISLAB_LLM_API_KEY=
-THESISLAB_FINANCIAL_PROVIDER=none
-THESISLAB_FINANCIAL_API_KEY=
-THESISLAB_ALLOW_PUBLIC_DISCLOSURES=true
-THESISLAB_SEC_CONTACT=
-```
-
-| 配置 | 当前支持范围 |
-| --- | --- |
-| LLM | `deepseek`、`openai`、`qwen` 的固定官方 Chat Completions 端点；选用账户支持且具备 JSON object 输出的模型。真实验收只使用 DeepSeek。 |
-| 金融数据 | `none` 禁用付费查询；`fuyao` 使用有授权的同花顺扶摇 Key。直接 iFinD MCP 尚未连接。 |
-| 公开披露 | `THESISLAB_ALLOW_PUBLIC_DISCLOSURES` 是权限上限；页面还需勾选本次公开检索同意，启动不会自动查询。 |
-| SEC | 需要在 `THESISLAB_SEC_CONTACT` 填有效联系邮箱；无需金融 Key。 |
+已有项目与 `.env` 时跳过克隆和复制。用终端编辑器填写 `.env` 中的 `THESISLAB_LLM_PROVIDER`、`THESISLAB_LLM_MODEL` 和 `THESISLAB_LLM_API_KEY`。支持 DeepSeek、OpenAI、Qwen；首次仅体验规划时可将 `THESISLAB_FINANCIAL_PROVIDER` 设为 `none`。
 
 ```bash
-.venv/bin/python tools/check_provider_config.py
 .venv/bin/python -m thesislab.agent_server --port 8767
 ```
 
-打开 [本地 Research Workspace](http://127.0.0.1:8767/research)。在启动终端按 **Ctrl+C** 停止。设置页仅显示安全状态；“已配置”不表示连接已验证。点击“开始理解命题”会调用配置的模型账户，确认计划后可能调用所选数据工具。
+打开 **[http://127.0.0.1:8767/research](http://127.0.0.1:8767/research)**。按 Ctrl+C 停止；研究自动保存到本地，重启后可从研究库打开。
 
-切换模型：停止服务，编辑 `.env` 中 Provider、模型及相应 Key，再启动。直接运行时，进程环境变量（包括空值）优先于 `.env`；任务保存在 `.local/agent.sqlite`。配置解析不执行 shell 命令。详细优先级见 [环境配置说明](docs/ENV-CONFIGURATION.md)。
+*Configure your provider in `.env`, start the server, then open the research workspace in your browser.*
 
-### Docker Compose（已提供，未构建或启动验收）
+点击开始会调用你的模型账户。金融查询需合法授权，公开披露需单独同意；Web 不接收或展示 API Key。切换模型后重启服务。完整 Provider、SEC 与 Docker 说明见 [Setup & Configuration](docs/SETUP.md)。
 
-参考 DeerFlow 的本地运行体验，保留现有同源服务，不拆分成多个新框架。需要 Docker Engine/Desktop 和 Compose；**当前验收机器没有 Docker，以下是仓库配置的使用方式，不是已通过的容器运行记录**。
+## How It Works
 
-```bash
-docker compose up --build -d
-docker compose stop
+```mermaid
+flowchart LR
+    A[自然语言命题] --> B[Agent 规划]
+    B --> C[金融与披露工具]
+    C --> D[证据核验]
+    D --> E[研究工作区]
+    E -->|审核与继续研究| B
 ```
 
-Compose 定义单个 `workspace` 服务，承载静态前端、API、Runtime 和 SQLite；仅映射宿主机 `127.0.0.1:8767`，命名卷 `research` 保存数据。直接 Python 服务和容器不能同时占用该端口。
+**模型负责理解、提议计划和受限补查；程序负责工具执行、确定性计算与证据核验。** 用户审核计划，工具能力决定可验证范围，缺口会留在研究记录中。
 
-`env_file: .env` 加载配置，当前没有 Provider 的 `environment` 覆盖；宿主机同名变量不会自动替换这些条目。更改 `.env` 后使用：
+当前使用同源 Python / JavaScript Web、后台 Agent Runtime 与 SQLite。实现边界和内部模块复用见 [Architecture](docs/PRODUCT-GUIDE.md#architecture)。
 
-```bash
-docker compose up -d --force-recreate
-```
+## Documentation
 
-普通 `restart` 不重读 env_file；不要使用 `down -v` 删除研究卷。Compose 对 `$` 的解析与直接 Python 不同，含 `$` 的字面值使用单引号；不要输出展开后的容器环境。`.env` 不进入镜像。
+- [Setup & Configuration](docs/SETUP.md) — 安装、Provider、启动与 Docker 配置。
+- [Architecture](docs/PRODUCT-GUIDE.md#architecture) — Runtime、验证与持久化。
+- [Evidence & Data Sources](docs/PRODUCT-GUIDE.md#data--evidence) — 来源、定位、计算及数据授权。
+- [Evaluation](docs/MVP-FREEZE-2026-10-14.md) — 实际测试与验收记录；[详细记录](docs/MVP-ACCEPTANCE.md)。
+- [Known Limitations](docs/PRODUCT-GUIDE.md#known-limitations) — 工具覆盖与尚未完成的验证。
+- [Security](docs/PRODUCT-GUIDE.md#security) — 密钥、外部访问和本地运行边界。
 
-## 5. Architecture
+历史设计、M1/M2/M4 与 API 契约保留在 [工程参考](docs/PRODUCT-GUIDE.md)，首页结构的参考依据见 [README References](docs/README-REFERENCES.md)。
 
-| 层 | 当前实现 |
-| --- | --- |
-| Web Interface | 原生 JavaScript/CSS Research Workspace；Python 同源 HTTP API，页面轮询研究状态。没有独立 React/Next.js 服务。 |
-| Agent Runtime | 持久化 `Understand → Clarify → Plan → Execute → Verify → Revise → Conclude` 状态机，后台线程执行，最多两项并行研究。 |
-| LLM Provider | 固定官方端点 Adapter；独立理解、计划、受限补查与上下文追问。模型输出先经过契约校验。 |
-| Financial / Disclosure Tools | 扶摇利润表、SEC CompanyFacts、已配置发行人目录与公开 PDF；执行能力取决于授权、网络和解析覆盖。 |
-| Verification | 复用 M1 来源/定位/Decimal 计算与 M2 数值谓词核验；复用 M4 扶摇契约及明确标注的历史离线链路。 |
-| Persistence | SQLAlchemy + SQLite，WAL、追加快照和检查点。重启后标记中断，不自动重放可能已计费的请求。 |
+## Development Status
 
-动态能力体现在 LLM 按命题提出不同问题和工具建议、程序按对象/期间编译查询，以及根据实际缺口选择有限补查；固定状态机本身不保证自主研究质量。没有全网自主搜索、无限循环或多 Agent 架构。旧版工作区仍保留。
+ThesisLab 当前是单用户本地 MVP。交互链路经过合成验收，真实 LLM 已测试但计划语义仍需人工审核；真实金融数据与公开披露的在线端到端验收尚未通过，公网 DNS 安全校验限制了当前数据访问。Compose 已提供，Docker 构建/启动未验收，无公网部署。当前不支持完整行情估值、宏观因果或产业链利润份额验证。详细结果与后续工作见 [Evaluation](docs/MVP-FREEZE-2026-10-14.md) 和 [Known Limitations](docs/PRODUCT-GUIDE.md#known-limitations)。
 
-历史资料：[M1 验证](docs/M1-REPORT.md)、[M2 用法](docs/M2-USAGE.md)、[M2 报告](docs/M2-REPORT.md)、[M4 契约](docs/M4-FUYAO-INCOME-CONTRACT.md)、[存储设计](docs/STORAGE.md)、[V1 交付](docs/V1-DELIVERY.md)。这些记录对应当时阶段，当前入口与验收状态以本文和最新验收记录为准。
+## License
 
-## 6. Data & Evidence
-
-| 来源 | 数据与真实性边界 |
-| --- | --- |
-| 同花顺扶摇 | 利润表 HTTP Adapter；合法授权 Key 才能访问。历史响应仅用于离线回归，没有生产历史缓存回退。本轮未进行付费查询。 |
-| SEC CompanyFacts | 年度、entity-wide US-GAAP/USD 的收入、成本、净利润、营业利润、经营现金流标签；保留 CIK、期间、单位、披露日期、accession 和原始文件链接。当前在线验收未成功。 |
-| 发行人原始披露 | 内置目录仅贵州茅台；可处理经提供的公开 PDF。核验范围为可解析的 CNY/元合并利润表；用户提供日期不冒充独立核实的披露日。 |
-| 私有历史材料 | 原有响应与四份原始 PDF 的本地回归，属于真实历史材料，不是新上游请求；材料、数据库与原始数字不随源码发布。 |
-| 合成测试数据 | `tests/natural_fixtures.py` 等明确的模型/HTTP 夹具；专用浏览器环境显示合成标签，不读取真实账户。 |
-
-证据包含来源 URL、JSON Pointer 或 PDF 页/表/行/列、报告期及原始快照哈希。哈希证明内容一致性，不保证发行人财务绝对真实。计算使用命名 Decimal 算子并保留公式及输入 ID，缺数不补零，口径不对齐不计算。
-
-同口径不同数值全部保留，未决冲突阻止采用输入；跨期间、单位或币种差异记录为口径限制，不静默选择有利来源。未知供应商累计口径保留 `partial`。历史成功访问不证明当前接口、账户配额或数据再分发权限仍有效。
-
-## 7. Evaluation
-
-截至 **2026-10-14（Asia/Shanghai）** 的可核实结果：
-
-| 类别 | 已执行结果 |
-| --- | --- |
-| 本轮离线回归 | 215 项测试：213 通过、0 失败、2 跳过；跳过组依赖未配置的私有材料。依赖一致性与前端语法检查通过。 |
-| 合成浏览器验收 | 六类命题输入、主体澄清、计划编辑/增删、执行、证据定位、追问、修订、比较和保存恢复已验证。金融数字为合成数据。 |
-| 真实 LLM | 累计 14 次实际请求，含一次 HTTP401 和一次计划契约失败；六类完成理解，采用明确验收范围后生成结构有效计划。已返回 Token 总计 31,304，部分审计尝试未返回用量，不能推算完整账单。语义验收未全部通过。 |
-| 真实金融 API | 本轮付费扶摇查询 0；未取得对应新上游响应，不能声称在线金融验证成功。 |
-| 原始 PDF | 历史 M1 记录实际解析四份私有 PDF、核验八个字段；属于离线真实材料回归。当前公开披露 smoke 被 `public_dns_not_global` 阻止，新在线 PDF 验收未通过。 |
-| Docker / 部署 | Compose 静态配置检查通过；Docker 未安装，没有构建/启动成功记录。Python 本地 Web 已运行，无公网部署。 |
-
-离线复现：
-
-```bash
-.venv/bin/python tools/run_tests.py
-.venv/bin/python -m pip check
-node --check src/thesislab/web/research.js
-```
-
-隔离的合成浏览器环境：
-
-```bash
-.venv/bin/python tools/serve_natural_fixture.py
-```
-
-打开 `http://127.0.0.1:8768/research`，按 Ctrl+C 停止。六类样例为：单公司盈利改善、估值回落与基本面、两家公司盈利质量、产业链利润转移、宏观事件影响、对象模糊的命题。真实 LLM 的 14 次授权预算已经耗尽，本轮未新增模型请求。
-
-详细证据见 [验收记录](docs/MVP-ACCEPTANCE.md)、[冻结审查](docs/MVP-FREEZE-2026-10-14.md)。私有材料回归需自行提供获准材料，方法见 M1/M4 文档；不能用合成测试替代。
-
-## 8. Known Limitations
-
-- **金融上游与公开披露仍未完成在线端到端验收**：当前网络的非全局/Fake-IP DNS 触发公网安全校验。扶摇连接存在这一限制且未获本轮付费查询授权；公开披露 smoke 实际被阻止。安全检查没有放宽为任意私网访问。
-- **真实规划语义尚不可靠**：过度澄清、收入/营业利润混用、无关公司问题、跨年度比率误用等曾出现。明显指标错配有执行阻断；提示修正只做离线回归，未再次真实模型复验。用户仍须审核计划含义与阈值。
-- 工具覆盖有限：无行情/估值历史、宏观时间序列、产业链利润份额、全面盈利质量或因果验证；未解析公司不会凭空产生金融标识。
-- PDF 不支持扫描件 OCR、任意布局或单位；SEC 仅上述年度口径。合成数据不包含所有真实上游变化与解析异常。
-- 本地单用户，无多用户鉴权、PostgreSQL 或分布式任务队列。恢复不会自动重发中断的模型请求；需用户明确修订/重试。
-- Docker 运行未验证，未提供公网部署；失效条件只记录，不执行定时监控。产品不执行交易或给出投资评级。
-
-## 9. Roadmap / Not Implemented
-
-1. 在合规授权与正常公网 DNS 环境下完成真实金融接口、原始披露及端到端验证。
-2. 改进计划语义与工具匹配，以新增真实评估验证，保留人工审核。
-3. 验证 Docker 构建/恢复，再考虑版本历史界面与有明确预算的命题监控。
-
-## 10. Security
-
-所有 Provider、模型名称、Key 及服务端权限通过 `.env`/进程环境配置。Web 不接收、显示或返回密钥；密钥不写入任务、研究导出或工具参数。公开披露同意与 Key 分开，重启后重新确认。
-
-`.gitignore` 排除真实 `.env*`（仅放行空凭证示例）、`.local/`、数据库、运行日志和内部材料；Docker 同样排除这些输入。不要上传真实配置、原始响应、数据库、日志或含敏感内容的截图。提交前检查工作区、暂存区与待推送提交历史；发现疑似真实凭证即停止推送，历史删除不能代替密钥轮换。
-
-外部传输保持 TLS/证书校验，数据源使用公网 DNS 校验与地址绑定、拒绝携凭证 URL及重定向；仅模型官方固定端点单独兼容 `198.18.0.0/15` Fake-IP 映射，不能用于任意源地址。供应商失败不自动重试，robots、SEC 联系信息和低速请求要求保留。
-
-服务默认仅监听 loopback；Compose 仅发布到宿主机 loopback。源码公开不代表私人数据或供应商数据有再分发许可；项目尚未选定开源许可证，见 [许可说明](docs/RIGHTS-AND-LICENSES.md)。上述检查不是完整漏洞或泄漏检测保证。
+仓库目前没有 LICENSE 文件，尚未选定项目开源许可证。不能据此声明 MIT 或 Apache-2.0 授权；依赖与数据使用边界见 [Rights & Licenses](docs/RIGHTS-AND-LICENSES.md)。
