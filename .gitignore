@@ -218,3 +218,24 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ThesisLab: internal evidence and all generated runtime outputs stay local.
+.local/
+.private/
+private-data/
+real-data/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.pdf
+*.png
+*.csv
+*.parquet
+*response*.json
+*trace*.json
+*manifest*.json
+*records*.json
+.env
+.env.*
+!.env.example

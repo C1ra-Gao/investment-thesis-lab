@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "thesislab"
+version = "0.1.0"
+description = "M1 offline evidence provenance and deterministic financial verification"
+requires-python = ">=3.12"
+dependencies = ["SQLAlchemy==2.0.44"]
+
+[project.optional-dependencies]
+regression = ["pdfplumber==0.11.7"]
+
+[project.scripts]
+thesislab = "thesislab.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
